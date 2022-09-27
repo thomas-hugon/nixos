@@ -8,6 +8,7 @@
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
+      ./unstable-packages.nix
     ];
 
   # Bootloader.
@@ -19,14 +20,7 @@
   boot.loader.grub.efiSupport = true;
   boot.loader.grub.useOSProber = true;
 
-#boot.loader.grub.extraEntries = ''
-#  menuentry "Gentoo" {
-#    search --set=gentoo --fs-uuid 64d04261-1a32-4772-b5dc-2b3c6e8926f2
-#    configfile "($gentoo)/boot/grub/grub.cfg"
-#  }
-#'';
-
-  networking.hostName = "nixos"; # Define your hostname.
+  networking.hostName = "croziflette"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 
   # Configure network proxy if necessary
@@ -97,24 +91,62 @@
   users.users.thomas = {
     isNormalUser = true;
     description = "thomas";
-    extraGroups = [ "networkmanager" "wheel" ];
+    extraGroups = [ "networkmanager" "wheel" "docker" "lxd" "libvirtd" ];
     packages = with pkgs; [
-      firefox
-    #  thunderbird
+      libreoffice
+      postman
+      vscode
     ];
   };
 
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
 
+  xdg.portal = {
+    # need to set enable-webrtc-pipewire-capturer in chrome
+    enable = true;
+  };
+
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
     vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
-  #  wget
+    htop
+    lm_sensors
     google-chrome
     git
+    docker-compose
+    gnome.gnome-tweaks
+    virt-manager
+    rclone
   ];
+
+
+  systemd.timers."rclone-sync" = {
+    wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "1m";
+        OnUnitActiveSec = "10m";
+        Unit = "rclone-sync.service";
+      };
+  };
+
+  systemd.services."rclone-sync" = {
+    script = ''
+      set -eu
+      echo "Rclone syncing Documents to gdrive"
+      ${pkgs.rclone}/bin/rclone sync -v $HOME/Documents gdrive_documents:
+      echo "Rclone syncing .dotfiles to gdrive"
+      ${pkgs.rclone}/bin/rclone sync -v $HOME/.dotfiles gdrive_dotfiles:
+    '';
+    serviceConfig = {
+      Type = "oneshot";
+      User= "thomas";
+    };
+  };
+
+
+
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
@@ -128,6 +160,14 @@
 
   # Enable the OpenSSH daemon.
   # services.openssh.enable = true;
+
+  #services.dbus.enable = true;
+
+  #docker
+  virtualisation.docker.enable = true;
+  virtualisation.libvirtd.enable = true;
+  virtualisation.lxd.enable = true;
+  programs.dconf.enable = true;
 
   # Open ports in the firewall.
   # networking.firewall.allowedTCPPorts = [ ... ];
